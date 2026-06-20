@@ -1,0 +1,238 @@
+package org.upro.reception.Service;
+
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.upro.reception.DTO.BonReceptionResponseDTO;
+import org.upro.reception.DTO.Bon_RecptionDTO.CreateBonReceptionResponseDTO;
+import org.upro.reception.DTO.Bon_RecptionDTO.CreateLigneBonDTO;
+import org.upro.reception.DTO.Bon_RecptionDTO.ReceptionFactureDTO;
+import org.upro.reception.DTO.LigneBonResponseDTO;
+import org.upro.reception.db.Entity.BonReception;
+import org.upro.reception.db.Entity.CustomUser;
+import org.upro.reception.db.Entity.ReceptionFacture;
+import org.upro.reception.db.Entity.ReceptionLigneBon;
+import org.upro.reception.db.Repo.BonReceptionRepository;
+import org.upro.reception.db.Repo.ReceptionLigneBonRepository;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class BonReceptionService {
+
+    private final  BonReceptionRepository bonRepo;
+
+    private final UserAccessService userAccessService;
+
+    private final BonReceptionRepository bonReceptionRepository;
+
+    private final ReceptionLigneBonRepository receptionLigneBonRepository;
+
+
+
+    private CustomUser getCurrentUser() {
+
+        return (CustomUser) userAccessService.getCurrentUser();
+    }
+
+    private boolean isSupervisor(CustomUser user) {
+        return user.getRoles().stream()
+                .anyMatch(r -> r.getName().equals("reception-sup"));
+    }
+
+
+
+    @Transactional
+    public Integer createBonReception(CreateBonReceptionResponseDTO dto) {
+
+        CustomUser user = getCurrentUser();
+
+        BonReception br = new BonReception();
+
+        br.setDateReception(dto.dateReception());
+        br.setFourId(dto.fourId());
+        br.setFourName(dto.fourName());
+
+        br.setCreatedBy(user.getUsername());
+        br.setCreatedAt(Instant.now());
+
+        // Save bon_reception first
+        bonReceptionRepository.save(br);
+
+        return br.getId();
+    }
+
+    @Transactional
+    public Integer addLigneBon(Integer brcpId, CreateLigneBonDTO dto) {
+
+        CustomUser user = getCurrentUser();
+
+        BonReception br = bonReceptionRepository.findById(brcpId)
+                .orElseThrow(() -> new RuntimeException("BonReception not found: " + brcpId));
+
+        ReceptionLigneBon line = buildLigne(dto, br, user);
+
+        ReceptionLigneBon saved = receptionLigneBonRepository.save(line);
+
+        return saved.getId();
+    }
+
+
+
+    @Transactional
+    public BonReceptionResponseDTO validateBon(Integer brcpId) {
+
+        CustomUser user = getCurrentUser();
+
+        if (!isSupervisor(user)) {
+            throw new IllegalStateException("Only supervisors can validate bon");
+        }
+
+        BonReception bon = bonRepo.findById(brcpId)
+                .orElseThrow(() -> new IllegalStateException("Bon not found"));
+
+        // prevent double validation
+        if (Boolean.TRUE.equals(bon.getIsValidated())) {
+            throw new IllegalStateException("Bon is already validated");
+        }
+
+        bon.setIsValidated(true);
+        bon.setValidatedAt(Instant.now());
+        bon.setValidatedBy(user.getUsername());
+
+        BonReception saved = bonRepo.save(bon);
+
+        return mapToResponse(saved);
+    }
+
+
+
+    private ReceptionLigneBon buildLigne(
+            CreateLigneBonDTO dto,
+            BonReception br,
+            CustomUser user
+    ) {
+
+        ReceptionLigneBon line = new ReceptionLigneBon();
+
+        // relationship
+        line.setBrcp(br);
+
+        // required fields
+        line.setMedId(dto.medId());
+        line.setLot(dto.lot());
+        line.setQnt(dto.qnt());
+
+        // optional fields
+        line.setColis(dto.colis());
+        line.setVrag(dto.vrag());
+        line.setQteAbime(dto.qteAbime());
+
+        line.setName(dto.name());
+        line.setDosage(dto.dosage());
+        line.setForme(dto.forme());
+
+        line.setDdp(dto.ddp());
+        line.setDdf(dto.ddf());
+
+        line.setPpa(dto.ppa());
+        line.setShp(dto.shp());
+
+        line.setColissage(dto.colissage());
+
+        // audit
+        line.setCreatedBy(user.getUsername());
+        line.setCreatedAt(Instant.now());
+
+        return line;
+    }
+
+
+
+/////////////////////////////////////////////////////////////////////////////////
+///
+public List<BonReceptionResponseDTO> getAll() {
+    return bonRepo.findAll().stream()
+            .map(this::mapToResponse)
+            .toList();
+}
+
+    public List<BonReceptionResponseDTO> getToday() {
+        return bonRepo.findByDateReception(LocalDate.now())
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    public List<BonReceptionResponseDTO> getBetween(LocalDate start, LocalDate end) {
+        return bonRepo.findByDateReceptionBetween(start, end)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    private BonReceptionResponseDTO mapToResponse(BonReception bon) {
+
+        List<LigneBonResponseDTO> lignes = receptionLigneBonRepository.findByBrcp_Id(bon.getId())
+                .stream()
+                .map(this::mapLigne)
+                .toList();
+
+        List<ReceptionFactureDTO> factures = bon.getReceptionFactures() == null
+                ? List.of()
+                : bon.getReceptionFactures().stream()
+                .map(this::mapFacture)
+                .toList();
+
+        return new BonReceptionResponseDTO(
+                bon.getId(),
+                bon.getDateReception(),
+                bon.getFourId(),
+                bon.getFourName(),
+                bon.getCreatedBy(),
+                bon.getCreatedAt(),
+                bon.getIsValidated(),
+                bon.getValidatedAt(),
+                bon.getValidatedBy(),
+                factures,
+                lignes
+        );
+    }
+
+    private LigneBonResponseDTO mapLigne(ReceptionLigneBon l) {
+        return new LigneBonResponseDTO(
+                l.getId(),
+                l.getMedId(),
+                l.getLot(),
+                l.getQnt(),
+                l.getColis(),
+                l.getVrag(),
+                l.getQteAbime(),
+                l.getName(),
+                l.getDosage(),
+                l.getForme(),
+                l.getDdp(),
+                l.getDdf(),
+                l.getPpa(),
+                l.getShp(),
+                l.getColissage(),
+                l.getCreatedBy(),
+                l.getCreatedAt()
+        );
+    }
+
+
+    private ReceptionFactureDTO mapFacture(ReceptionFacture f) {
+        return new ReceptionFactureDTO(
+                f.getDateFacture(),
+                f.getRef(),
+                f.getCreatedAt()
+        );
+    }
+
+
+}
