@@ -5,9 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.upro.reception.DTO.BonReceptionResponseDTO;
-import org.upro.reception.DTO.Bon_RecptionDTO.CreateBonReceptionResponseDTO;
-import org.upro.reception.DTO.Bon_RecptionDTO.CreateLigneBonDTO;
-import org.upro.reception.DTO.Bon_RecptionDTO.ReceptionFactureDTO;
+import org.upro.reception.DTO.Bon_RecptionDTO.*;
 import org.upro.reception.DTO.LigneBonResponseDTO;
 import org.upro.reception.db.Entity.BonReception;
 import org.upro.reception.db.Entity.CustomUser;
@@ -24,27 +22,25 @@ import java.util.List;
 @RequiredArgsConstructor
 public class BonReceptionService {
 
-    private final  BonReceptionRepository bonRepo;
-
+    private final BonReceptionRepository bonRepo;
     private final UserAccessService userAccessService;
-
-    private final BonReceptionRepository bonReceptionRepository;
-
     private final ReceptionLigneBonRepository receptionLigneBonRepository;
 
-
-
     private CustomUser getCurrentUser() {
-
         return (CustomUser) userAccessService.getCurrentUser();
     }
 
     private boolean isSupervisor(CustomUser user) {
-        return user.getRoles().stream()
-                .anyMatch(r -> r.getName().equals("reception-sup"));
+        return user.getType().equals("reception-sup") || user.getType().equals("admin");
     }
 
+    @Transactional(readOnly = true)
+    public BonReceptionResponseDTO getById(Integer id) {
+        BonReception bon = bonRepo.findById(id)
+                .orElseThrow(() -> new IllegalStateException("Bon not found: " + id));
 
+        return mapToResponse(bon);
+    }
 
     @Transactional
     public Integer createBonReception(CreateBonReceptionResponseDTO dto) {
@@ -60,8 +56,21 @@ public class BonReceptionService {
         br.setCreatedBy(user.getUsername());
         br.setCreatedAt(Instant.now());
 
-        // Save bon_reception first
-        bonReceptionRepository.save(br);
+        if (dto.factures() != null) {
+            for (CreateFactureReceptionDTO factureDto : dto.factures()) {
+
+                ReceptionFacture facture = new ReceptionFacture();
+                facture.setRef(factureDto.ref());
+                facture.setDateFacture(factureDto.date());
+                facture.setCreatedAt(Instant.now());
+
+                facture.setBrcp(br);
+
+                br.getReceptionFactures().add(facture);
+            }
+        }
+
+        bonRepo.save(br);
 
         return br.getId();
     }
@@ -71,7 +80,7 @@ public class BonReceptionService {
 
         CustomUser user = getCurrentUser();
 
-        BonReception br = bonReceptionRepository.findById(brcpId)
+        BonReception br = bonRepo.findById(brcpId)
                 .orElseThrow(() -> new RuntimeException("BonReception not found: " + brcpId));
 
         ReceptionLigneBon line = buildLigne(dto, br, user);
@@ -79,6 +88,34 @@ public class BonReceptionService {
         ReceptionLigneBon saved = receptionLigneBonRepository.save(line);
 
         return saved.getId();
+    }
+
+
+
+    @Transactional
+    public BonReceptionResponseDTO clotureBon(Integer brcpId) {
+
+        CustomUser user = getCurrentUser();
+
+        if (!isSupervisor(user)) {
+            throw new IllegalStateException("Only supervisors can validate bon");
+        }
+
+        BonReception bon = bonRepo.findById(brcpId)
+                .orElseThrow(() -> new IllegalStateException("Bon not found"));
+
+        // prevent double validation
+        if (Boolean.TRUE.equals(bon.getIsCloture()) || Boolean.FALSE.equals(bon.getIsValidated())) {
+            throw new IllegalStateException("Bon is already validated");
+        }
+
+        bon.setIsCloture(true);
+        bon.setClotureAt(Instant.now());
+        bon.setClotureBy(user.getUsername());
+
+        BonReception saved = bonRepo.save(bon);
+
+        return mapToResponse(saved);
     }
 
 
@@ -109,6 +146,54 @@ public class BonReceptionService {
         return mapToResponse(saved);
     }
 
+    @Transactional
+    public BonReceptionResponseDTO editBonReception(Integer brcpId, EditBonReceptionDTO dto) {
+
+        BonReception bon = bonRepo.findById(brcpId)
+                .orElseThrow(() -> new IllegalStateException("Bon not found"));
+
+        if (Boolean.TRUE.equals(bon.getIsValidated())) {
+            throw new IllegalStateException("Cannot edit validated bon");
+        }
+
+
+        System.out.println(dto.toString());
+
+        bon.setDateReception(dto.dateReception());
+        bon.setFourId(dto.fourId());
+        bon.setFourName(dto.fourName());
+
+        if (dto.factures() != null) {
+            bon.getReceptionFactures().clear();
+
+            for (ReceptionFactureDTO fDto : dto.factures()) {
+                ReceptionFacture facture = new ReceptionFacture();
+                facture.setBrcp(bon);
+                facture.setDateFacture(fDto.date());
+                facture.setRef(fDto.ref());
+                facture.setCreatedAt(Instant.now());
+
+                bon.getReceptionFactures().add(facture);
+            }
+        }
+
+        BonReception saved = bonRepo.save(bon);
+
+        return mapToResponse(saved);
+    }
+
+    @Transactional
+    public void deleteBonReception(Integer brcpId) {
+
+        BonReception bon = bonRepo.findById(brcpId)
+                .orElseThrow(() -> new IllegalStateException("Bon not found"));
+
+        if (Boolean.TRUE.equals(bon.getIsValidated())) {
+            throw new IllegalStateException("Cannot delete validated bon");
+        }
+
+        bonRepo.delete(bon);
+    }
 
 
     private ReceptionLigneBon buildLigne(
@@ -125,7 +210,7 @@ public class BonReceptionService {
         // required fields
         line.setMedId(dto.medId());
         line.setLot(dto.lot());
-        line.setQnt(dto.qnt());
+        line.setQte(dto.qte());
 
         // optional fields
         line.setColis(dto.colis());
@@ -133,6 +218,12 @@ public class BonReceptionService {
         line.setQteAbime(dto.qteAbime());
 
         line.setName(dto.name());
+        System.out.println("DTO labo = " + dto.labo());
+
+        line.setLabo(dto.labo());
+
+        System.out.println("ENTITY labo = " + line.getLabo());
+
         line.setDosage(dto.dosage());
         line.setForme(dto.forme());
 
@@ -149,6 +240,53 @@ public class BonReceptionService {
         line.setCreatedAt(Instant.now());
 
         return line;
+    }
+
+    @Transactional
+    public LigneBonResponseDTO editLigneBon(Integer ligneId, EditLigneBonDTO dto) {
+
+        ReceptionLigneBon ligne = receptionLigneBonRepository.findById(ligneId)
+                .orElseThrow(() -> new IllegalStateException("Ligne not found"));
+
+        BonReception bon = ligne.getBrcp();
+
+        if (Boolean.TRUE.equals(bon.getIsCloture())) {
+            throw new IllegalStateException("Cannot edit line of clotured bon");
+        }
+
+        ligne.setLot(dto.lot());
+        ligne.setQte(dto.qte());
+
+        ligne.setColis(dto.colis());
+        ligne.setVrag(dto.vrag());
+        ligne.setQteAbime(dto.qteAbime());
+
+        ligne.setDdp(dto.ddp());
+        ligne.setDdf(dto.ddf());
+
+        ligne.setPpa(dto.ppa());
+        ligne.setShp(dto.shp());
+
+        ligne.setColissage(dto.colissage());
+
+        ReceptionLigneBon saved = receptionLigneBonRepository.save(ligne);
+
+        return mapLigne(saved);
+    }
+
+    @Transactional
+    public void deleteLigneBon(Integer ligneId) {
+
+        ReceptionLigneBon ligne = receptionLigneBonRepository.findById(ligneId)
+                .orElseThrow(() -> new IllegalStateException("Ligne not found"));
+
+        BonReception bon = ligne.getBrcp();
+
+        if (Boolean.TRUE.equals(bon.getIsCloture())) {
+            throw new IllegalStateException("Cannot delete line of clotured bon");
+        }
+
+        receptionLigneBonRepository.delete(ligne);
     }
 
 
@@ -208,11 +346,12 @@ public List<BonReceptionResponseDTO> getAll() {
                 l.getId(),
                 l.getMedId(),
                 l.getLot(),
-                l.getQnt(),
+                l.getQte(),
                 l.getColis(),
                 l.getVrag(),
                 l.getQteAbime(),
                 l.getName(),
+                l.getLabo(),
                 l.getDosage(),
                 l.getForme(),
                 l.getDdp(),
@@ -233,6 +372,7 @@ public List<BonReceptionResponseDTO> getAll() {
                 f.getCreatedAt()
         );
     }
+
 
 
 }

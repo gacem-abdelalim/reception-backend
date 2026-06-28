@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 public record ReceptionFactureDTO(
-        LocalDate dateFacture,
+        LocalDate date,
         String ref,
         Instant createdAt
 ) {};

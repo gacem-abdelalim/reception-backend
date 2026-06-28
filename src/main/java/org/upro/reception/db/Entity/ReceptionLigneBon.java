@@ -32,13 +32,14 @@ public class ReceptionLigneBon {
     @Column(name = "med_id", nullable = false)
     private Integer medId;
 
+
     @Size(max = 100)
     @Column(name = "lot", length = 100)
     private String lot;
 
     @NotNull
     @Column(name = "qnt", nullable = false)
-    private Integer qnt;
+    private Integer qte;
 
 
     @Column(name = "colis")
@@ -85,6 +86,10 @@ public class ReceptionLigneBon {
     @ColumnDefault("CURRENT_TIMESTAMP")
     @Column(name = "created_at")
     private Instant createdAt;
+
+    @Size(max = 255)
+    @Column(name = "labo")
+    private String labo;
 
 
 }

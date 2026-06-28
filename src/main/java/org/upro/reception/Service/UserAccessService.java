@@ -33,6 +33,7 @@ public class UserAccessService {
     public CustomUser getCurrentUser() {
 
         String username = Usernamelog();
+        System.out.println(username);
 
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));

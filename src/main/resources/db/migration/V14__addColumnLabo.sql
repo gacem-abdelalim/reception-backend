@@ -1,0 +1,2 @@
+ALTER TABLE reception_ligne_bon
+    ADD COLUMN IF NOT EXISTS labo VARCHAR(255);

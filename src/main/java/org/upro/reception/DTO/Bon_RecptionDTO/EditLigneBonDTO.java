@@ -1,12 +1,8 @@
-package org.upro.reception.DTO;
+package org.upro.reception.DTO.Bon_RecptionDTO;
 
-
-import java.time.Instant;
 import java.time.LocalDate;
 
-public record LigneBonResponseDTO(
-        Integer id,
-        Integer medId,
+public record EditLigneBonDTO(
         String lot,
         Integer qte,
         Integer colis,
@@ -18,9 +14,7 @@ public record LigneBonResponseDTO(
         String forme,
         LocalDate ddp,
         LocalDate ddf,
-        Double ppa,
-        Double shp,
-        Integer colissage,
-        String createdBy,
-        Instant createdAt
+        double ppa,
+        double shp,
+        Integer colissage
 ) {}

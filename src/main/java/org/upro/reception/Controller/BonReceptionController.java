@@ -8,7 +8,10 @@ import org.springframework.web.bind.annotation.*;
 import org.upro.reception.DTO.BonReceptionResponseDTO;
 import org.upro.reception.DTO.Bon_RecptionDTO.CreateBonReceptionResponseDTO;
 import org.upro.reception.DTO.Bon_RecptionDTO.CreateLigneBonDTO;
+import org.upro.reception.DTO.Bon_RecptionDTO.EditBonReceptionDTO;
+import org.upro.reception.DTO.Bon_RecptionDTO.EditLigneBonDTO;
 import org.upro.reception.DTO.FournisseurDto;
+import org.upro.reception.DTO.LigneBonResponseDTO;
 import org.upro.reception.DTO.ProduitDto;
 import org.upro.reception.Service.BonReceptionService;
 
@@ -32,18 +35,19 @@ public class BonReceptionController {
     // =========================
     @PostMapping
     public Integer createBon(@RequestBody CreateBonReceptionResponseDTO dto) {
+
         return service.createBonReception(dto);
     }
 
     // =========================
     // ADD LIGNE
     // =========================
-    @PostMapping("/{brcpId}/lignes")
+    @PostMapping("/{brcId}/ligne")
     public Integer addLigne(
-            @PathVariable Integer brcpId,
+            @PathVariable Integer brcId,
             @RequestBody CreateLigneBonDTO dto
     ) {
-        return service.addLigneBon(brcpId, dto);
+        return service.addLigneBon(brcId, dto);
     }
 
 
@@ -75,17 +79,49 @@ public class BonReceptionController {
         return service.getBetween(start, end);
     }
 
-    @PutMapping("/bon-reception/{id}/validate")
+    @PutMapping("/{id}/validate")
     public ResponseEntity<BonReceptionResponseDTO> validate(@PathVariable Integer id) {
         return ResponseEntity.ok(service.validateBon(id));
     }
 
+    @PutMapping("/{id}/cloture")
+    public ResponseEntity<BonReceptionResponseDTO> cloture(@PathVariable Integer id) {
+        return ResponseEntity.ok(service.clotureBon(id));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<BonReceptionResponseDTO> editBonReception(
+            @PathVariable Integer id,
+            @RequestBody EditBonReceptionDTO dto
+    ) {
+        return ResponseEntity.ok(service.editBonReception(id, dto));
+    }
+
+    @PutMapping("/ligne/{ligneId}")
+    public ResponseEntity<LigneBonResponseDTO> editLigneBon(
+            @PathVariable Integer ligneId,
+            @RequestBody EditLigneBonDTO dto
+    ) {
+        return ResponseEntity.ok(service.editLigneBon(ligneId, dto));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteBonReception(@PathVariable Integer id) {
+        service.deleteBonReception(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/ligne/{ligneId}")
+    public ResponseEntity<Void> deleteLigneBon(@PathVariable Integer ligneId) {
+        service.deleteLigneBon(ligneId);
+        return ResponseEntity.noContent().build();
+    }
 
 
     /**
      * Fetch fournisseurs from cache
      */
-    @GetMapping("/reception/fournisseurs")
+    @GetMapping("/fournisseurs")
     public ResponseEntity<List<FournisseurDto>> getFournisseurs() {
 
         var cache = cacheManager.getCache("fournisseurs");
@@ -103,7 +139,7 @@ public class BonReceptionController {
     /**
      * Fetch produits from cache
      */
-    @GetMapping("/reception/produits")
+    @GetMapping("/produits")
     public ResponseEntity<List<ProduitDto>> getProduits() {
 
         var cache = cacheManager.getCache("produits");

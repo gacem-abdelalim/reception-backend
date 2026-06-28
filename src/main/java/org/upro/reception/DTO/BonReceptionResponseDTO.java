@@ -1,13 +1,14 @@
 package org.upro.reception.DTO;
 
 
+import lombok.Getter;
 import org.upro.reception.DTO.Bon_RecptionDTO.ReceptionFactureDTO;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
-// Response DTO
+// Res
 public record BonReceptionResponseDTO(
         Integer id,
         LocalDate dateReception,

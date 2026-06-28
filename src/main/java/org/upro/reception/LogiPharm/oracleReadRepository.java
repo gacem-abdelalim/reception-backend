@@ -70,7 +70,7 @@ public class oracleReadRepository {
 
     public List<FournisseurDto> getFournisseurs() {
 
-        DynamicQuery dq = dynamicQueryRepository.findByName("reception-fourneseur")
+        DynamicQuery dq = dynamicQueryRepository.findByName("reception-fournisseur")
                 .orElseThrow(() -> new RuntimeException("Query 'reception-fourneseur' not found"));
 
         String sql = dq.getSqlText();

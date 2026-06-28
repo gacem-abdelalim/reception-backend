@@ -6,13 +6,14 @@ public record CreateLigneBonDTO(
 
          Integer medId,
          String lot,
-         Integer qnt,
+         Integer qte,
 
          Integer colis,
          Integer vrag,
          Integer qteAbime,
 
          String name,
+         String labo,
          String dosage,
          String forme,
 

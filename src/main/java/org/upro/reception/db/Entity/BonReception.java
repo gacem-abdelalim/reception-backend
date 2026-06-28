@@ -51,8 +51,21 @@ public class BonReception {
     @Size(max = 100)
     @Column(name = "validated_by", length = 100)
     private String validatedBy;
-    @OneToMany(mappedBy = "brcp")
+
+    @OneToMany(mappedBy = "brcp", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ReceptionFacture> receptionFactures = new LinkedHashSet<>();
+
+
+    @ColumnDefault("false")
+    @Column(name = "is_cloture")
+    private Boolean isCloture;
+
+    @Column(name = "cloture_at")
+    private Instant clotureAt;
+
+    @Size(max = 100)
+    @Column(name = "cloture_by", length = 100)
+    private String clotureBy;
 
 
 }
