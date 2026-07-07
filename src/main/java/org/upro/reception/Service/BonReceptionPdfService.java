@@ -1,7 +1,10 @@
 package org.upro.reception.Service;
 
+
 import com.lowagie.text.*;
-import com.lowagie.text.pdf.*;
+import com.lowagie.text.pdf.PdfPCell;
+import com.lowagie.text.pdf.PdfPTable;
+import com.lowagie.text.pdf.PdfWriter;
 import org.springframework.stereotype.Service;
 import org.upro.reception.DTO.BonReceptionResponseDTO;
 import org.upro.reception.DTO.Bon_RecptionDTO.ReceptionFactureDTO;
@@ -9,6 +12,7 @@ import org.upro.reception.DTO.LigneBonResponseDTO;
 
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
+import java.util.stream.Collectors;
 
 @Service
 public class BonReceptionPdfService {
@@ -28,92 +32,112 @@ public class BonReceptionPdfService {
             Font smallFont = new Font(Font.HELVETICA, 8);
             Font headerFont = new Font(Font.HELVETICA, 8, Font.BOLD, Color.WHITE);
 
-            Paragraph title = new Paragraph("BON DE RÉCEPTION", titleFont);
+            Paragraph title = new Paragraph("BON DE RÉCEPTION PHYSIQUE", titleFont);
             title.setAlignment(Element.ALIGN_CENTER);
             title.setSpacingAfter(15);
             document.add(title);
 
+            // =========================
+            // HEAD / INFORMATIONS
+            // =========================
             PdfPTable infoTable = new PdfPTable(4);
             infoTable.setWidthPercentage(100);
             infoTable.setSpacingAfter(15);
-            infoTable.setWidths(new float[]{2, 4, 2, 4});
+            infoTable.setWidths(new float[]{2.2f, 4.8f, 2.2f, 4.8f});
+
+            // Ligne 1
+            addInfoCell(infoTable, "Date réception", sectionFont);
+            addInfoCell(infoTable, text(bon.dateReception()), normalFont);
+
+            addInfoCell(infoTable, "Fournisseur", sectionFont);
+            addInfoCell(infoTable, text(bon.fourName()), normalFont);
+
+            // Ligne 2
+            addInfoCell(infoTable, "Créé par", sectionFont);
+            addInfoCell(infoTable, text(bon.createdBy()), normalFont);
 
             addInfoCell(infoTable, "ID", sectionFont);
             addInfoCell(infoTable, String.valueOf(bon.id()), normalFont);
 
-            addInfoCell(infoTable, "Date réception", sectionFont);
-            addInfoCell(infoTable, String.valueOf(bon.dateReception()), normalFont);
-
-            addInfoCell(infoTable, "Fournisseur ID", sectionFont);
-            addInfoCell(infoTable, String.valueOf(bon.fourId()), normalFont);
-
-            addInfoCell(infoTable, "Fournisseur", sectionFont);
-            addInfoCell(infoTable, bon.fourName(), normalFont);
-
-            addInfoCell(infoTable, "Créé par", sectionFont);
-            addInfoCell(infoTable, bon.createdBy(), normalFont);
-
-            addInfoCell(infoTable, "Créé le", sectionFont);
-            addInfoCell(infoTable, String.valueOf(bon.createdAt()), normalFont);
-
-            addInfoCell(infoTable, "Validé", sectionFont);
-            addInfoCell(infoTable, Boolean.TRUE.equals(bon.isValidated()) ? "Oui" : "Non", normalFont);
-
+            // Ligne 3
             addInfoCell(infoTable, "Validé par", sectionFont);
-            addInfoCell(infoTable, bon.validatedBy(), normalFont);
+            addInfoCell(infoTable, text(bon.validatedBy()), normalFont);
+
+            addInfoCell(infoTable, "Date de validation", sectionFont);
+            addInfoCell(infoTable, text(bon.validatedAt()), normalFont);
+
+            /*
+
+            // Ligne 4
+
+            addInfoCell(infoTable, "Clôturé par", sectionFont);
+            addInfoCell(infoTable, text(bon.clotureBy()), normalFont);
+
+            addInfoCell(infoTable, "Date de clôture", sectionFont);
+            addInfoCell(infoTable, text(bon.clotureAt()), normalFont);
+            */
 
             document.add(infoTable);
 
-            Paragraph factureTitle = new Paragraph("Factures", sectionFont);
-            factureTitle.setSpacingAfter(8);
-            document.add(factureTitle);
-
-            PdfPTable factureTable = new PdfPTable(3);
-            factureTable.setWidthPercentage(100);
-            factureTable.setSpacingAfter(15);
-            factureTable.setWidths(new float[]{3, 3, 5});
-
-            addHeaderCell(factureTable, "Date", headerFont);
-            addHeaderCell(factureTable, "Référence", headerFont);
-            addHeaderCell(factureTable, "Créé le", headerFont);
+            // =========================
+            // FACTURES EN UNE SEULE LIGNE
+            // =========================
+            String facturesText = "-";
 
             if (bon.factures() != null && !bon.factures().isEmpty()) {
-                for (ReceptionFactureDTO f : bon.factures()) {
-                    addBodyCell(factureTable, String.valueOf(f.date()), normalFont);
-                    addBodyCell(factureTable, f.ref(), normalFont);
-                    addBodyCell(factureTable, String.valueOf(f.createdAt()), normalFont);
+                facturesText = bon.factures()
+                        .stream()
+                        .map(ReceptionFactureDTO::ref)
+                        .filter(ref -> ref != null && !ref.trim().isEmpty())
+                        .collect(Collectors.joining(", "));
+
+                if (facturesText.isBlank()) {
+                    facturesText = "-";
                 }
-            } else {
-                addBodyCell(factureTable, "-", normalFont);
-                addBodyCell(factureTable, "-", normalFont);
-                addBodyCell(factureTable, "-", normalFont);
             }
 
-            document.add(factureTable);
+            Paragraph factureParagraph = new Paragraph("Factures : " + facturesText, normalFont);
+            factureParagraph.setSpacingAfter(15);
+            document.add(factureParagraph);
 
+            // =========================
+            // LIGNES DE RÉCEPTION
+            // =========================
             Paragraph ligneTitle = new Paragraph("Lignes de réception", sectionFont);
             ligneTitle.setSpacingAfter(8);
             document.add(ligneTitle);
 
-            PdfPTable ligneTable = new PdfPTable(16);
+            PdfPTable ligneTable = new PdfPTable(15);
             ligneTable.setWidthPercentage(100);
             ligneTable.setWidths(new float[]{
-                    1.2f, 1.5f, 4f, 3f, 2f, 2f,
-                    1.7f, 1.8f, 1.8f, 1.5f,
-                    1.5f, 1.7f, 1.5f, 1.5f,
-                    1.7f, 1.7f
+                    4.0f, 3.0f, 2.0f, 2.0f, 2.0f,
+                    1.8f, 1.8f, 1.5f, 1.5f, 1.8f,
+                    1.5f, 1.5f, 1.5f, 1.5f, 2.0f
             });
 
             String[] headers = {
-                    "ID", "Med ID", "Nom", "Labo", "Dosage", "Forme",
-                    "Lot", "DDP", "DDF", "PPA",
-                    "SHP", "Colissage", "Colis", "Vrac",
-                    "Qte", "Abîmé"
+                    "Nom",
+                    "Labo",
+                    "Dosage",
+                    "Forme",
+                    "Lot",
+                    "DDF",
+                    "DDP",
+                    "PPA",
+                    "SHP",
+                    "Colissage",
+                    "Colis",
+                    "Vrac",
+                    "Qte",
+                    "Abîmé",
+                    "Créé par"
             };
 
             for (String h : headers) {
                 addHeaderCell(ligneTable, h, headerFont);
             }
+
+            ligneTable.setHeaderRows(1);
 
             int totalQte = 0;
             int totalColis = 0;
@@ -121,32 +145,34 @@ public class BonReceptionPdfService {
             int totalAbime = 0;
 
             if (bon.lignes() != null && !bon.lignes().isEmpty()) {
-                for (LigneBonResponseDTO l : bon.lignes()) {
+                for (LigneBonResponseDTO l : bon.lignes()
+                        .stream()
+                        .sorted((a, b) -> text(a.name()).compareToIgnoreCase(text(b.name())))
+                        .toList()) {
 
                     totalQte += safeInt(l.qte());
                     totalColis += safeInt(l.colis());
                     totalVrac += safeInt(l.vrag());
                     totalAbime += safeInt(l.qteAbime());
 
-                    addBodyCell(ligneTable, String.valueOf(l.id()), smallFont);
-                    addBodyCell(ligneTable, String.valueOf(l.medId()), smallFont);
-                    addBodyCell(ligneTable, l.name(), smallFont);
-                    addBodyCell(ligneTable, l.labo(), smallFont);
-                    addBodyCell(ligneTable, l.dosage(), smallFont);
-                    addBodyCell(ligneTable, l.forme(), smallFont);
-                    addBodyCell(ligneTable, l.lot(), smallFont);
-                    addBodyCell(ligneTable, String.valueOf(l.ddp()), smallFont);
-                    addBodyCell(ligneTable, String.valueOf(l.ddf()), smallFont);
-                    addBodyCell(ligneTable, String.valueOf(l.ppa()), smallFont);
-                    addBodyCell(ligneTable, String.valueOf(l.shp()), smallFont);
-                    addBodyCell(ligneTable, String.valueOf(l.colissage()), smallFont);
-                    addBodyCell(ligneTable, String.valueOf(l.colis()), smallFont);
-                    addBodyCell(ligneTable, String.valueOf(l.vrag()), smallFont);
-                    addBodyCell(ligneTable, String.valueOf(l.qte()), smallFont);
-                    addBodyCell(ligneTable, String.valueOf(l.qteAbime()), smallFont);
+                    addBodyCell(ligneTable, text(l.name()), smallFont);
+                    addBodyCell(ligneTable, text(l.labo()), smallFont);
+                    addBodyCell(ligneTable, text(l.dosage()), smallFont);
+                    addBodyCell(ligneTable, text(l.forme()), smallFont);
+                    addBodyCell(ligneTable, text(l.lot()), smallFont);
+                    addBodyCell(ligneTable, text(l.ddf()), smallFont);
+                    addBodyCell(ligneTable, text(l.ddp()), smallFont);
+                    addBodyCell(ligneTable, text(l.ppa()), smallFont);
+                    addBodyCell(ligneTable, text(l.shp()), smallFont);
+                    addBodyCell(ligneTable, text(l.colissage()), smallFont);
+                    addBodyCell(ligneTable, text(l.colis()), smallFont);
+                    addBodyCell(ligneTable, text(l.vrag()), smallFont);
+                    addBodyCell(ligneTable, text(l.qte()), smallFont);
+                    addBodyCell(ligneTable, text(l.qteAbime()), smallFont);
+                    addBodyCell(ligneTable, text(l.createdBy()), smallFont);
                 }
             } else {
-                for (int i = 0; i < 16; i++) {
+                for (int i = 0; i < 15; i++) {
                     addBodyCell(ligneTable, "-", smallFont);
                 }
             }
@@ -176,6 +202,20 @@ public class BonReceptionPdfService {
 
     private int safeInt(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private String text(Object value) {
+        if (value == null) {
+            return "-";
+        }
+
+        String s = String.valueOf(value);
+
+        if (s.trim().isEmpty() || s.equalsIgnoreCase("null")) {
+            return "-";
+        }
+
+        return s;
     }
 
     private void addInfoCell(PdfPTable table, String text, Font font) {

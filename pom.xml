@@ -135,12 +135,12 @@
 
 
             <plugin>
-                <groupId>org.flywaydb</groupId>
+                <groupId> org.flywaydb</groupId>
                 <artifactId>flyway-maven-plugin</artifactId>
 
 
                 <configuration>
-                    <url>jdbc:postgresql://localhost:5432/reception_db?createDatabaseIfNotExist=true</url>
+                    <url>jdbc:postgresql://192.168.10.14:5432/reception_db?createDatabaseIfNotExist=true</url>
                     <user>recption</user>
                     <password>ma3ndichcode</password>
                     <cleanDisabled>false</cleanDisabled>

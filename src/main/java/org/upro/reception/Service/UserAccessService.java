@@ -30,6 +30,15 @@ public class UserAccessService {
         return jwt.getClaimAsString("preferred_username").toUpperCase();
     }
 
+    public List<String> Groupslog() {
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        Jwt jwt = (Jwt) auth.getPrincipal();
+
+        return jwt.getClaimAsStringList("groups");
+    }
+
     public CustomUser getCurrentUser() {
 
         String username = Usernamelog();

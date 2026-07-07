@@ -26,7 +26,6 @@ public class ProduitCacheService {
      */
     @Cacheable(value = CACHE_NAME)
     public List<ProduitDto> getProduits() {
-        System.out.println("Fetching produits from Oracle...");
         return oracleReadRepository.getProduits();
     }
 
@@ -37,7 +36,6 @@ public class ProduitCacheService {
     @CachePut(value = CACHE_NAME)
     @Scheduled(cron = "0 0 2 * * ?")
     public List<ProduitDto> refreshProduitsCache() {
-        System.out.println("Refreshing produits cache...");
         return oracleReadRepository.getProduits();
     }
 }

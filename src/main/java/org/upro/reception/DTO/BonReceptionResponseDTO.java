@@ -21,6 +21,11 @@ public record BonReceptionResponseDTO(
         Instant validatedAt,
         String validatedBy,
 
+        Boolean isCloture,
+        Instant clotureAt,
+        String clotureBy,
+
+
         List<ReceptionFactureDTO> factures,
         List<LigneBonResponseDTO> lignes
 ) {}

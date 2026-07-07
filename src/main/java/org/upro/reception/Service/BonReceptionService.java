@@ -1,6 +1,5 @@
 package org.upro.reception.Service;
 
-
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +16,7 @@ import org.upro.reception.db.Repo.ReceptionLigneBonRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -26,12 +26,21 @@ public class BonReceptionService {
     private final UserAccessService userAccessService;
     private final ReceptionLigneBonRepository receptionLigneBonRepository;
 
+    Set<String> authorizedTypes = Set.of("admin", "reception-sup");
+
+
+
     private CustomUser getCurrentUser() {
         return (CustomUser) userAccessService.getCurrentUser();
     }
 
-    private boolean isSupervisor(CustomUser user) {
-        return user.getType().equals("reception-sup") || user.getType().equals("admin");
+
+
+    private boolean isSupervisor() {
+        List<String> groups = userAccessService.Groupslog();
+
+        return groups.contains("reception-sup")
+                || groups.contains("admin");
     }
 
     @Transactional(readOnly = true)
@@ -78,10 +87,17 @@ public class BonReceptionService {
     @Transactional
     public Integer addLigneBon(Integer brcpId, CreateLigneBonDTO dto) {
 
-        CustomUser user = getCurrentUser();
-
         BonReception br = bonRepo.findById(brcpId)
                 .orElseThrow(() -> new RuntimeException("BonReception not found: " + brcpId));
+
+        CustomUser user = getCurrentUser();
+        String type = user.getType() == null ? "" : user.getType().trim().toLowerCase();
+
+
+
+        if (Boolean.TRUE.equals(br.getIsValidated()) &&  !isSupervisor()) {
+            throw new IllegalStateException("Cannot add line of closed bon or user is not supervisor");
+        }
 
         ReceptionLigneBon line = buildLigne(dto, br, user);
 
@@ -97,7 +113,7 @@ public class BonReceptionService {
 
         CustomUser user = getCurrentUser();
 
-        if (!isSupervisor(user)) {
+        if (!isSupervisor()) {
             throw new IllegalStateException("Only supervisors can validate bon");
         }
 
@@ -106,7 +122,7 @@ public class BonReceptionService {
 
         // prevent double validation
         if (Boolean.TRUE.equals(bon.getIsCloture()) || Boolean.FALSE.equals(bon.getIsValidated())) {
-            throw new IllegalStateException("Bon is already validated");
+            throw new IllegalStateException("Bon is already closed or bon is not validated");
         }
 
         bon.setIsCloture(true);
@@ -125,7 +141,7 @@ public class BonReceptionService {
 
         CustomUser user = getCurrentUser();
 
-        if (!isSupervisor(user)) {
+        if (!isSupervisor()) {
             throw new IllegalStateException("Only supervisors can validate bon");
         }
 
@@ -152,12 +168,18 @@ public class BonReceptionService {
         BonReception bon = bonRepo.findById(brcpId)
                 .orElseThrow(() -> new IllegalStateException("Bon not found"));
 
-        if (Boolean.TRUE.equals(bon.getIsValidated())) {
+
+        CustomUser user = getCurrentUser();
+        String type = user.getType() == null ? "" : user.getType().trim().toLowerCase();
+
+        boolean allowed = authorizedTypes.contains(type);
+
+
+        if (Boolean.TRUE.equals(bon.getIsValidated()) || !allowed) {
             throw new IllegalStateException("Cannot edit validated bon");
         }
 
 
-        System.out.println(dto.toString());
 
         bon.setDateReception(dto.dateReception());
         bon.setFourId(dto.fourId());
@@ -188,7 +210,12 @@ public class BonReceptionService {
         BonReception bon = bonRepo.findById(brcpId)
                 .orElseThrow(() -> new IllegalStateException("Bon not found"));
 
-        if (Boolean.TRUE.equals(bon.getIsValidated())) {
+
+        CustomUser user = getCurrentUser();
+        String type = user.getType() == null ? "" : user.getType().trim().toLowerCase();
+
+
+        if (Boolean.TRUE.equals(bon.getIsValidated()) || !isSupervisor()) {
             throw new IllegalStateException("Cannot delete validated bon");
         }
 
@@ -218,11 +245,9 @@ public class BonReceptionService {
         line.setQteAbime(dto.qteAbime());
 
         line.setName(dto.name());
-        System.out.println("DTO labo = " + dto.labo());
 
         line.setLabo(dto.labo());
 
-        System.out.println("ENTITY labo = " + line.getLabo());
 
         line.setDosage(dto.dosage());
         line.setForme(dto.forme());
@@ -245,13 +270,19 @@ public class BonReceptionService {
     @Transactional
     public LigneBonResponseDTO editLigneBon(Integer ligneId, EditLigneBonDTO dto) {
 
+
+
         ReceptionLigneBon ligne = receptionLigneBonRepository.findById(ligneId)
                 .orElseThrow(() -> new IllegalStateException("Ligne not found"));
 
         BonReception bon = ligne.getBrcp();
 
-        if (Boolean.TRUE.equals(bon.getIsCloture())) {
-            throw new IllegalStateException("Cannot edit line of clotured bon");
+        CustomUser user = getCurrentUser();
+        String type = user.getType() == null ? "" : user.getType().trim().toLowerCase();
+
+
+        if (Boolean.TRUE.equals(bon.getIsValidated()) && !isSupervisor()) {
+            throw new IllegalStateException("Cannot edit line of closed bon or user is not supervisor");
         }
 
         ligne.setLot(dto.lot());
@@ -336,6 +367,9 @@ public List<BonReceptionResponseDTO> getAll() {
                 bon.getIsValidated(),
                 bon.getValidatedAt(),
                 bon.getValidatedBy(),
+                bon.getIsCloture(),
+                bon.getClotureAt(),
+                bon.getClotureBy(),
                 factures,
                 lignes
         );
